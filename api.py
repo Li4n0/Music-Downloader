@@ -3,6 +3,7 @@ import time
 import os
 import random
 import requests
+import tkinter.filedialog
 from bs4 import BeautifulSoup
 from tkinter import *
 
@@ -13,7 +14,7 @@ api = (
 )
 
 
-def download_qq_music(song_data, list_name=None):  # 下载QQ音乐
+def download_qq_music(song_data, storage_path, list_name=None):  # 下载QQ音乐
     songmid = song_data['songmid']
     filename = 'C400' + songmid + '.m4a'
     guid = int(random.random() * 2147483647) * int(time.time() * 1000) % 10000000000
@@ -34,16 +35,17 @@ def download_qq_music(song_data, list_name=None):  # 下载QQ音乐
     audio_url = 'http://dl.stream.qqmusic.qq.com/%s?vkey=%s&guid=%s&uin=0&fromtag=66' % (filename, vkey, guid)  # 获取直链
     song = requests.get(audio_url)
     if list_name is not None:
-        if os.path.exists('output/' + list_name) is False:
-            os.mkdir('output/' + list_name)
-        # 过滤不合法文件名 (非常想知道歌手们为什么都这么有创造力，想出了这么多奇怪的歌名和艺名(╯‵□′)╯︵┻━┻)
+        if os.path.exists(storage_path + list_name) is False:
+            os.mkdir(storage_path + list_name)
         filename = ("%s/%s %s.mp3" % (
             list_name, song_data['songname'].replace('/', ''), song_data['singer'][0]['name'].replace('/', '')))
     else:
         filename = (
                 "%s %s.mp3" % (song_data['songname'].replace('/', ''), song_data['singer'][0]['name'].replace('/', '')))
-    filename = filename.replace('|', ':').replace('\"', '').replace('\\', '').replace('“', '').replace('”', '').replace(':', '：')
-    with open('output/' + filename.replace('|', '：'), 'wb') as file:
+        # 过滤不合法文件名 (非常想知道歌手们为什么都这么有创造力，想出了这么多奇怪的歌名和艺名(╯‵□′)╯︵┻━┻)
+    filename = filename.replace('|', ':').replace('\"', '').replace('\\', '').replace('“', '').replace('”', '').replace(
+        ':', '：').replace('*', '')
+    with open(storage_path + filename.replace('|', '：'), 'wb') as file:
         file.write(song.content)
         return (filename + '' * (30 - len(filename)) + '下载完成')
 
@@ -62,14 +64,20 @@ def qq_song(name, window, n='20'):  # 在QQ音乐乐库中搜索
     window.list2.place(relx='0.04', rely='0.865', relwidth='0.9', relheight='0.035')
 
     def download(event):  # 下载选中歌曲
-        songs_id = window.list.curselection()[0]
-        song_data = songs_list[songs_id]
-        window.list2.insert(0, download_qq_music(song_data))
+        try:
+            songs_id = window.list.curselection()[0]
+            song_data = songs_list[songs_id]
+            window.list2.insert(0, download_qq_music(song_data, window.storage_path))
+        except IndexError:
+            pass
 
     window.list.bind("<<ListboxSelect>>", download)
 
 
-def qq_song_list(url, list, root):  # 下载QQ音乐歌单内歌曲
+def qq_song_list(url, window):  # 下载QQ音乐歌单内歌曲
+    root = window.root
+    list = window.list
+    storage_path = window.storage_path
     dissit_id = re.findall('\d+', url)[0]
     url_l = api[2] + dissit_id
     headers = {
@@ -80,18 +88,22 @@ def qq_song_list(url, list, root):  # 下载QQ音乐歌单内歌曲
     cdlist = json.loads(data_r)['cdlist']
     list_name = cdlist[0]['dissname'].replace('|', '：')
     songlist = cdlist[0]['songlist']
-    for song in songlist:
+    # for song in songlist:
+    i = 0
+    while i < len(songlist):
+        song = songlist[i]
         try:
-            list.insert(0, download_qq_music(song, list_name))
+            list.insert(0, download_qq_music(song, storage_path, list_name))
             root.update()
+            i += 1
         except Exception as message:
-            print(message)
-            list.insert(0,message)
+            # print(message)
+            list.insert(0, '该歌曲下载失败，(若一直出错请检查网络或联系作者)错误信息：' + message)
             root.update()
     list.insert(0, '      ---------------全部下载完成,共计%s首歌曲--------------' % (len(songlist)))
 
 
-def qm_song(url, list):  # 下载全民音乐单曲
+def qm_song(url, window):  # 下载全民音乐单曲
     r = requests.get(url)
     soup = BeautifulSoup(r.content, 'lxml')
     singer = soup.select('.singer_user__name')[0]
@@ -105,19 +117,19 @@ def qm_song(url, list):  # 下载全民音乐单曲
     filename = music_name + '-' + singer_name + '.mp3'
     filename = filename.replace('|', ':').replace('\"', '').replace('\\', '').replace('/', '')
 
-    with open('output/' + filename, 'wb') as file:
+    with open(window.storage_path + filename, 'wb') as file:
         file.write(music.content)
-        list.insert(0, '             ' + filename + ' ' * (30 - len(filename)) + '下载完成')
+        window.list.insert(0, '             ' + filename + ' ' * (30 - len(filename)) + '下载完成')
 
 
-def qm_singer(url, list, root):  # 下载全民K歌歌手所有公开作品
+def qm_singer(url, window):  # 下载全民K歌歌手所有公开作品
     singer_index = requests.get(url)
     soup = BeautifulSoup(singer_index.text, 'lxml')
     songlist = soup.select('.mod_playlist__cover')
     for song in songlist:
-        qm_song(song.get('href'), list)
-        root.update_idletasks()
-    list.insert(0, '      ---------------全部下载完成,共计%s首歌曲--------------' % (len(songlist)))
+        qm_song(song.get('href'), window)
+        window.root.update_idletasks()
+    window.list.insert(0, '      ---------------全部下载完成,共计%s首歌曲--------------' % (len(songlist)))
 
 
 def help(root):  # 帮助面板
@@ -141,9 +153,17 @@ def help(root):  # 帮助面板
             在关键字后+‘|’+数字 可以控制搜索歌曲的数目，
             默认为20条)如 输入‘周杰伦|30’ 将显示‘周杰伦’相关
             的30首歌曲。在搜索结果列表 单击 想要下载的乐曲即可下载。
-        3、歌曲默认下载到本工具目录下的/output文件夹下
+        3、歌曲默认下载到本工具目录下的/output文件夹下,可另行修改
         ——————————————————————————————————————— 
         项目地址：https://github.com/Li4n0/Music-Downloader/
                         @Author：Li4n0            
                     """
     Label(help_window, text=help_message).pack()
+
+
+def setting(window):
+    directory = tkinter.filedialog.askdirectory() + '/'
+    if len(directory) != 1:
+        window.storage_path = directory
+        with open('.setting/setting.ini', 'w') as setting_file:
+            setting_file.write(directory)
