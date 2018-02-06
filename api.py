@@ -44,7 +44,7 @@ def download_qq_music(song_data, storage_path, list_name=None):  # 下载QQ音�
                 "%s %s.mp3" % (song_data['songname'].replace('/', ''), song_data['singer'][0]['name'].replace('/', '')))
         # 过滤不合法文件名 (非常想知道歌手们为什么都这么有创造力，想出了这么多奇怪的歌名和艺名(╯‵□′)╯︵┻━┻)
     filename = filename.replace('|', ':').replace('\"', '').replace('\\', '').replace('“', '').replace('”', '').replace(
-        ':', '：').replace('*', '')
+        ':', '：').replace('*', '').replace('?','？')
     with open(storage_path + filename.replace('|', '：'), 'wb') as file:
         file.write(song.content)
         return (filename + '' * (30 - len(filename)) + '下载完成')
@@ -98,7 +98,7 @@ def qq_song_list(url, window):  # 下载QQ音乐歌单内歌曲
             i += 1
         except Exception as message:
             # print(message)
-            list.insert(0, '该歌曲下载失败，(若一直出错请检查网络或联系作者)错误信息：' + message)
+            list.insert(0, '该歌曲下载失败，(若一直出错请检查网络或联系作者)错误信息：' + str(message))
             root.update()
     list.insert(0, '      ---------------全部下载完成,共计%s首歌曲--------------' % (len(songlist)))
 
